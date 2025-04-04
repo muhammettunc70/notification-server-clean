@@ -1,67 +1,40 @@
-const functions = require("firebase-functions");
+const express = require("express");
 const admin = require("firebase-admin");
+const app = express();
+require("dotenv").config();
 
-admin.initializeApp();
+app.use(express.json());
 
-exports.sendNewMessageNotification = functions.firestore
-    .document('orders/{orderId}/messages/{messageId}')
-    .onCreate(async (snap, context) => {
-        const messageData = snap.data();
-        const orderId = context.params.orderId;
+const serviceAccount = require("./firebaseKey.json");
 
-        // Yalnızca READER (admin) mesajıysa bildirimi gönder
-        if (messageData.sender !== "READER") {
-            console.log("Kullanıcı mesajı, bildirim gönderilmeyecek.");
-            return null;
-        }
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
-        // İlgili sipariş belgesini al
-        const orderRef = admin.firestore().collection("orders").doc(orderId);
-        const orderSnap = await orderRef.get();
+// Test endpoint
+app.get("/", (req, res) => {
+  res.send("Sunucu çalışıyor! 🚀");
+});
 
-        if (!orderSnap.exists) {
-            console.log("Sipariş bulunamadı.");
-            return null;
-        }
+// Bildirim gönderme endpoint'i
+app.post("/send-notification", async (req, res) => {
+  const { token, title, body } = req.body;
 
-        const orderData = orderSnap.data();
-        const userId = orderData.userId;
+  const message = {
+    notification: { title, body },
+    token,
+  };
 
-        // Kullanıcı belgesini al
-        const userRef = admin.firestore().collection("users").doc(userId);
-        const userSnap = await userRef.get();
+  try {
+    const response = await admin.messaging().send(message);
+    res.status(200).send("Bildirim gönderildi: " + response);
+  } catch (error) {
+    console.error("Hata:", error);
+    res.status(500).send("Bildirim gönderilemedi.");
+  }
+});
 
-        if (!userSnap.exists) {
-            console.log("Kullanıcı bulunamadı.");
-            return null;
-        }
-
-        const userData = userSnap.data();
-        const fcmToken = userData.fcmToken;
-
-        if (!fcmToken) {
-            console.log("Kullanıcının FCM token'ı yok.");
-            return null;
-        }
-
-        // Bildirim mesajı
-        const payload = {
-            notification: {
-                title: "🔮 New Message from Your Tarot Reader",
-                body: messageData.text || "You have a new message in your chat.",
-            },
-            data: {
-                orderId: orderId
-            }
-        };
-
-        // Bildirimi gönder
-        try {
-            await admin.messaging().sendToDevice(fcmToken, payload);
-            console.log("✅ Bildirim başarıyla gönderildi.");
-        } catch (error) {
-            console.error("❌ Bildirim gönderilemedi:", error);
-        }
-
-        return null;
-    });
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Sunucu ${PORT} portunda çalışıyor.`);
+});
