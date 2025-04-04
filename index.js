@@ -25,11 +25,19 @@ app.post("/send-notification", async (req, res) => {
     token,
   };
 
+  // 🔍 LOG: gönderilen bildirim içeriği
+  console.log("📤 Bildirim gönderiliyor:", JSON.stringify(message, null, 2));
+
   try {
     const response = await admin.messaging().send(message);
+
+    // ✅ LOG: başarılı gönderim
+    console.log("✅ Bildirim gönderildi:", response);
+
     res.status(200).send("Bildirim gönderildi: " + response);
   } catch (error) {
-    console.error("Hata:", error);
+    // ❌ LOG: hata olursa
+    console.error("❌ Bildirim hatası:", error);
     res.status(500).send("Bildirim gönderilemedi.");
   }
 });
